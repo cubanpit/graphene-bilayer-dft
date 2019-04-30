@@ -1,0 +1,8 @@
+# GPAW output
+*.txt
+
+# GPAW files
+*.gpw
+
+# bandstructure files
+*.json
