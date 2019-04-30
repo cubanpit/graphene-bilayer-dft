@@ -23,7 +23,7 @@ graphene = Atoms('C' * 2,
 
 # Perform standard ground state calculation (with plane wave basis)
 calc = GPAW(mode='lcao',
-            basis='sz(dzp)',
+            basis='dzp',
             xc='PBE',
             kpts=(10, 10, 1),
             txt='graphene_gs_first.txt')
@@ -42,10 +42,11 @@ print('Potential Energy at first step:', en)
 
 # Restart from ground state and fix potential:
 calc = GPAW('graphene_gs.gpw',
-            nbands=8,
+            nbands=16,
             fixdensity=True,
             symmetry='off',
             kpts={'path': 'GMKG', 'npoints': 100},
+            convergence={'bands': 8},
             txt='graphene_gs_second.txt')
 
 en = calc.get_potential_energy()

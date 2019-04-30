@@ -8,6 +8,7 @@ from ase import Atoms
 from ase.visualize import view
 from gpaw import GPAW, FermiDirac, PW
 from ase.dft.kpoints import get_special_points, bandpath
+from ase.parallel import parprint
 import matplotlib.pyplot as plt
 import sys
 
@@ -100,10 +101,10 @@ b = a / np.sqrt(3)
 d = 3.35
 
 # indices for rotation -> moving from (n, m) to (m, n)
-# n, m = 2, 1   # 21.79 deg
-# n, m = 4, 3   # 9.43 deg
-n, m = 13, 12   # 2.65 deg
-# n, m = 32, 31   # 1.05 deg
+# n, m = 2, 1       # 21.79 deg
+n, m = 4, 3       # 9.43 deg
+# n, m = 13, 12     # 2.65 deg
+# n, m = 32, 31     # 1.05 deg
 gcd = np.gcd(n, m)
 n /= gcd
 m /= gcd
@@ -121,7 +122,7 @@ v2 = n * un_el_cell[0] + m * un_el_cell[1]
 theta = angle_between(v2, v1)
 c, s = np.cos(theta), np.sin(theta)
 R = np.array([[c, -s], [s, c]])
-print('RRA =', np.degrees(theta))
+parprint('RRA =', np.degrees(theta))
 
 # rotated layer from AB stacking
 rot_pos = np.array([x + np.array([-0.5*a, 0.5*b]) for x in un_pos])
@@ -137,7 +138,8 @@ if len(super_pos) != expected_number:
                        " theoretical prediction, there is something wrong!")
 
 # change recursion limit, otherwise ase.Atoms will reach it and crash
-sys.setrecursionlimit(int(expected_number*1.1))
+if expected_number > 1000:
+    sys.setrecursionlimit(int(expected_number*1.1))
 
 # supercell vectors
 v3 = -m * un_el_cell[0] + (n + m) * un_el_cell[1]
@@ -147,9 +149,9 @@ super_cell = np.array([np.append(v2, 0),
                        np.append(v3, 0),
                        [0, 0, 15 * b]])
 
-print('Angle between cell vectors =',
+parprint('Angle between cell vectors =',
       np.degrees(angle_between(super_cell[0][:-1], super_cell[1][:-1])))
-print('Norm of cell vectors =',
+parprint('Norm of cell vectors =',
       np.linalg.norm(super_cell[0]), np.linalg.norm(super_cell[1]))
 
 grap_bilayer = Atoms('C' * len(super_pos),
@@ -157,6 +159,7 @@ grap_bilayer = Atoms('C' * len(super_pos),
                      cell=super_cell,
                      pbc=True)
 
+# build path in BZ for bandstructure calculation
 points = get_special_points(super_cell, lattice='hexagonal')
 GMKG = [points[k] for k in 'GMKG']
 kpts, x, X = bandpath(GMKG, super_cell, 200)
@@ -178,18 +181,19 @@ calc = GPAW(mode='lcao',
 grap_bilayer.calc = calc
 en = grap_bilayer.get_potential_energy()
 calc.write('graphene_bilayer_gs.gpw')
-print('Potential Energy at first step:', en)
+parprint('Potential Energy at first step:', en)
 
 # Restart from ground state and fix potential:
 calc = GPAW('graphene_bilayer_gs.gpw',
-            nbands=4*len(super_pos),
+            nbands=3*len(super_pos),
             fixdensity=True,
             symmetry='off',
             kpts=kpts,
+            convergence={'bands': (2*len(super_pos)+10)},
             txt='graphene_bilayer_gs_second.txt')
 
 en = calc.get_potential_energy()
-print('Potential Energy at second step:', en)
+parprint('Potential Energy at second step:', en)
 
 bs = calc.band_structure()
 bs.write(filename='bandstructure_rot.json')

@@ -4,5 +4,10 @@
 # GPAW files
 *.gpw
 
-# bandstructure files
+# bandstructure files or images
 *.json
+*.png
+
+# error and output file
+*.o*
+*.e*
