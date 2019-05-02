@@ -31,14 +31,14 @@ calc = GPAW(mode='lcao',
             basis='dzp',
             xc='PBE',
             kpts=(10, 10, 1),
-            txt='graphene_bilayer_gs_first.txt')
+            txt='graphene_bilayer_gs.txt')
 
 # calc = GPAW(mode=PW(350),
 #             xc='PBE',
 #             kpts=(10, 10, 1),
 #             random=True,  # random guess (needed if many empty bands required)
 #             occupations=FermiDirac(0.01),
-#             txt='graphene_gs_first.txt')
+#             txt='graphene_gs.txt')
 
 grap_bilayer.calc = calc
 en = grap_bilayer.get_potential_energy()
@@ -51,7 +51,7 @@ calc = GPAW('graphene_bilayer_gs.gpw',
             fixdensity=True,
             symmetry='off',
             kpts={'path': 'GMKG', 'npoints': 200},
-            txt='graphene_bilayer_gs_second.txt')
+            txt='graphene_bilayer_gs.txt')
 
 en = calc.get_potential_energy()
 print('Potential Energy at second step:', en)

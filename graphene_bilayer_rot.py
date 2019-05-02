@@ -6,7 +6,7 @@ Calculate the band structure of graphene along special point in the BZ
 import numpy as np
 from ase import Atoms
 from ase.visualize import view
-from gpaw import GPAW, FermiDirac, PW
+from gpaw import GPAW
 from ase.dft.kpoints import get_special_points, bandpath
 from ase.parallel import parprint
 import matplotlib.pyplot as plt
@@ -102,9 +102,9 @@ d = 3.35
 
 # indices for rotation -> moving from (n, m) to (m, n)
 # n, m = 2, 1       # 21.79 deg
-n, m = 4, 3       # 9.43 deg
+# n, m = 4, 3       # 9.43 deg
 # n, m = 13, 12     # 2.65 deg
-# n, m = 32, 31     # 1.05 deg
+n, m = 32, 31     # 1.05 deg
 gcd = np.gcd(n, m)
 n /= gcd
 m /= gcd
@@ -122,7 +122,7 @@ v2 = n * un_el_cell[0] + m * un_el_cell[1]
 theta = angle_between(v2, v1)
 c, s = np.cos(theta), np.sin(theta)
 R = np.array([[c, -s], [s, c]])
-parprint('RRA =', np.degrees(theta))
+parprint('# RRA =', np.degrees(theta))
 
 # rotated layer from AB stacking
 rot_pos = np.array([x + np.array([-0.5*a, 0.5*b]) for x in un_pos])
@@ -145,14 +145,15 @@ if expected_number > 1000:
 v3 = -m * un_el_cell[0] + (n + m) * un_el_cell[1]
 v2 = R @ v2
 v3 = R @ v3
+v_norm = np.linalg.norm(v2)
+
+# If "height" of the cell is less then the "side" ase.kpoints will crash, so
+# we set this temporary value for vacuum, then we correct it, it doesn't really
+# matter because we are working on a bandpath on the x-y plane.
+vacuum_tmp = v_norm
 super_cell = np.array([np.append(v2, 0),
                        np.append(v3, 0),
-                       [0, 0, 15 * b]])
-
-parprint('Angle between cell vectors =',
-      np.degrees(angle_between(super_cell[0][:-1], super_cell[1][:-1])))
-parprint('Norm of cell vectors =',
-      np.linalg.norm(super_cell[0]), np.linalg.norm(super_cell[1]))
+                       [0, 0, vacuum_tmp]])
 
 grap_bilayer = Atoms('C' * len(super_pos),
                      positions=super_pos,
@@ -164,36 +165,46 @@ points = get_special_points(super_cell, lattice='hexagonal')
 GMKG = [points[k] for k in 'GMKG']
 kpts, x, X = bandpath(GMKG, super_cell, 200)
 
+# now we set the real value for vacuum
+vacuum = 15
+super_cell[2][2] = vacuum
+grap_bilayer = Atoms('C' * len(super_pos),
+                     positions=super_pos,
+                     cell=super_cell,
+                     pbc=True)
+
 # Perform standard ground state calculation (with plane wave basis)
 calc = GPAW(mode='lcao',
             basis='sz(dzp)',
+            nbands='110%',
             xc='PBE',
-            kpts=(10, 10, 1),
-            txt='graphene_bilayer_gs_first.txt')
-
-# calc = GPAW(mode=PW(350),
-#             xc='PBE',
-#             kpts=(10, 10, 1),
-#             random=True,  # random guess (needed if many empty bands required)
-#             occupations=FermiDirac(0.01),
-#             txt='graphene_gs_first.txt')
+            kpts=(5, 5, 1),
+            txt='graphene_bilayer_gs.txt',
+            parallel=dict(band=2,              # band parallelization
+                          augment_grids=True,  # use all cores for XC/Poisson
+                          sl_auto=True)        # enable parallel ScaLAPACK
+           )
 
 grap_bilayer.calc = calc
-en = grap_bilayer.get_potential_energy()
+en1 = grap_bilayer.get_potential_energy()
 calc.write('graphene_bilayer_gs.gpw')
-parprint('Potential Energy at first step:', en)
 
 # Restart from ground state and fix potential:
 calc = GPAW('graphene_bilayer_gs.gpw',
-            nbands=3*len(super_pos),
+            nbands='110%',
             fixdensity=True,
             symmetry='off',
             kpts=kpts,
-            convergence={'bands': (2*len(super_pos)+10)},
-            txt='graphene_bilayer_gs_second.txt')
+            # convergence={'bands': '110%'},
+            txt='graphene_bilayer_gs.txt',
+            parallel=dict(band=2,              # band parallelization
+                          augment_grids=True,  # use all cores for XC/Poisson
+                          sl_auto=True)        # enable parallel ScaLAPACK
+           )
 
-en = calc.get_potential_energy()
-parprint('Potential Energy at second step:', en)
+en2 = calc.get_potential_energy()
+parprint('Energy self-consistent:', en1, '\nEnergy bandstructure:', en2)
 
 bs = calc.band_structure()
-bs.write(filename='bandstructure_rot.json')
+bs.write(filename='bandstructure_rot'+
+         str(np.round(np.degrees(theta),2))+'.json')
