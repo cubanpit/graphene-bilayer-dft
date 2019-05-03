@@ -103,8 +103,8 @@ d = 3.35
 # indices for rotation -> moving from (n, m) to (m, n)
 # n, m = 2, 1       # 21.79 deg
 # n, m = 4, 3       # 9.43 deg
-# n, m = 13, 12     # 2.65 deg
-n, m = 32, 31     # 1.05 deg
+n, m = 13, 12     # 2.65 deg
+# n, m = 32, 31     # 1.05 deg
 gcd = np.gcd(n, m)
 n /= gcd
 m /= gcd
@@ -155,11 +155,6 @@ super_cell = np.array([np.append(v2, 0),
                        np.append(v3, 0),
                        [0, 0, vacuum_tmp]])
 
-grap_bilayer = Atoms('C' * len(super_pos),
-                     positions=super_pos,
-                     cell=super_cell,
-                     pbc=True)
-
 # build path in BZ for bandstructure calculation
 points = get_special_points(super_cell, lattice='hexagonal')
 GMKG = [points[k] for k in 'GMKG']
@@ -183,7 +178,7 @@ calc = GPAW(mode='lcao',
             parallel=dict(band=2,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
-           )
+            )
 
 grap_bilayer.calc = calc
 en1 = grap_bilayer.get_potential_energy()
@@ -200,11 +195,11 @@ calc = GPAW('graphene_bilayer_gs.gpw',
             parallel=dict(band=2,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
-           )
+            )
 
 en2 = calc.get_potential_energy()
 parprint('Energy self-consistent:', en1, '\nEnergy bandstructure:', en2)
 
 bs = calc.band_structure()
-bs.write(filename='bandstructure_rot'+
-         str(np.round(np.degrees(theta),2))+'.json')
+bs.write(filename='bandstructure_rot' +
+         str(np.round(np.degrees(theta), 2)) + '.json')
