@@ -171,7 +171,7 @@ grap_bilayer = Atoms('C' * len(super_pos),
 # Perform standard ground state calculation (with plane wave basis)
 calc = GPAW(mode='lcao',
             basis='sz(dzp)',
-            nbands='110%',
+            # nbands='110%',
             xc='PBE',
             kpts=(5, 5, 1),
             txt='graphene_bilayer_gs.txt',
@@ -182,6 +182,7 @@ calc = GPAW(mode='lcao',
 
 grap_bilayer.calc = calc
 en1 = grap_bilayer.get_potential_energy()
+parprint('Finished self-consistent calculation.')
 calc.write('graphene_bilayer_gs.gpw')
 
 # Restart from ground state and fix potential:
@@ -198,8 +199,10 @@ calc = GPAW('graphene_bilayer_gs.gpw',
             )
 
 en2 = calc.get_potential_energy()
+parprint('Finished band structure calculation.')
 parprint('Energy self-consistent:', en1, '\nEnergy bandstructure:', en2)
 
 bs = calc.band_structure()
 bs.write(filename='bandstructure_rot' +
          str(np.round(np.degrees(theta), 2)) + '.json')
+parprint('Saved band structure file.')
