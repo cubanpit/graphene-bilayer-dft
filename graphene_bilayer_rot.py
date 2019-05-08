@@ -6,8 +6,9 @@ Calculate the band structure of graphene along special point in the BZ
 import numpy as np
 from ase import Atoms
 from ase.visualize import view
-from gpaw import GPAW
+from gpaw import GPAW, FermiDirac
 from ase.dft.kpoints import get_special_points, bandpath
+from gpaw.unfold import Unfold, find_K_from_k
 from ase.parallel import parprint
 import matplotlib.pyplot as plt
 import sys
@@ -102,9 +103,14 @@ d = 3.35
 
 # indices for rotation -> moving from (n, m) to (m, n)
 # n, m = 2, 1       # 21.79 deg
+# n, m = 3, 2       # 13.17 deg
 # n, m = 4, 3       # 9.43 deg
-n, m = 13, 12     # 2.65 deg
-# n, m = 32, 31     # 1.05 deg
+# n, m = 7, 6       # 5.09 deg
+# n, m = 8, 7       # 4.41 deg
+# n, m = 9, 8       # 3.89 deg
+n, m = 10, 9      # 3.48 deg # CRASH
+# n, m = 13, 12     # 2.65 deg # CRASH
+# n, m = 32, 31     # 1.05 deg # INSANE
 gcd = np.gcd(n, m)
 n /= gcd
 m /= gcd
@@ -122,7 +128,8 @@ v2 = n * un_el_cell[0] + m * un_el_cell[1]
 theta = angle_between(v2, v1)
 c, s = np.cos(theta), np.sin(theta)
 R = np.array([[c, -s], [s, c]])
-parprint('# RRA =', np.degrees(theta))
+RRA = np.round(np.degrees(theta), 2)
+parprint('# RRA =', RRA)
 
 # rotated layer from AB stacking
 rot_pos = np.array([x + np.array([-0.5*a, 0.5*b]) for x in un_pos])
@@ -147,22 +154,14 @@ v2 = R @ v2
 v3 = R @ v3
 v_norm = np.linalg.norm(v2)
 
-# If "height" of the cell is less then the "side" ase.kpoints will crash, so
-# we set this temporary value for vacuum, then we correct it, it doesn't really
-# matter because we are working on a bandpath on the x-y plane.
-vacuum_tmp = v_norm
+vacuum = 21
 super_cell = np.array([np.append(v2, 0),
                        np.append(v3, 0),
-                       [0, 0, vacuum_tmp]])
+                       [0, 0, vacuum]])
+primary_cell = np.array([np.append(un_el_cell[0], 0),
+                         np.append(un_el_cell[1], 0),
+                         [0, 0, vacuum]])
 
-# build path in BZ for bandstructure calculation
-points = get_special_points(super_cell, lattice='hexagonal')
-GMKG = [points[k] for k in 'GMKG']
-kpts, x, X = bandpath(GMKG, super_cell, 200)
-
-# now we set the real value for vacuum
-vacuum = 15
-super_cell[2][2] = vacuum
 grap_bilayer = Atoms('C' * len(super_pos),
                      positions=super_pos,
                      cell=super_cell,
@@ -171,11 +170,11 @@ grap_bilayer = Atoms('C' * len(super_pos),
 # Perform standard ground state calculation (with plane wave basis)
 calc = GPAW(mode='lcao',
             basis='sz(dzp)',
-            # nbands='110%',
             xc='PBE',
             kpts=(5, 5, 1),
-            txt='graphene_bilayer_gs.txt',
-            parallel=dict(band=2,              # band parallelization
+            occupations=FermiDirac(0.01),
+            txt='graphene_bilayer_sc_'+str(RRA)+'.txt',
+            parallel=dict(band=4,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
             )
@@ -183,26 +182,58 @@ calc = GPAW(mode='lcao',
 grap_bilayer.calc = calc
 en1 = grap_bilayer.get_potential_energy()
 parprint('Finished self-consistent calculation.')
-calc.write('graphene_bilayer_gs.gpw')
+calc.write('graphene_bilayer_sc_'+str(RRA)+'.gpw')
+
+# Build path in BZ for bandstructure calculation.
+# Temporarely change the cell height to workaround an ASE problem.
+super_cell[2][2] = v_norm
+points = get_special_points(super_cell, lattice='hexagonal')
+MKG = [points[k] for k in 'MKG']
+kpts, x, X = bandpath(MKG, super_cell, 100)
+super_cell[2][2] = vacuum
+
+# compute transformation matrix between primary cell and super cell
+# ratio = v_norm / a
+# alpha = angle_between(un_el_cell[0], v2)
+# c, s = np.cos(alpha), np.sin(alpha)
+# Ralpha = np.array([[c, -s], [s, c]])
+# Ralpha *= ratio
+# M = np.array([np.append(Ralpha[0], 0),
+#               np.append(Ralpha[1], 0),
+#               [0, 0, 1]])
+
+# compute kpoints in supercell
+# skpts = []
+# for k in kpts:
+#     sk = find_K_from_k(k, M)[0]
+#     skpts.append(sk)
 
 # Restart from ground state and fix potential:
-calc = GPAW('graphene_bilayer_gs.gpw',
-            nbands='110%',
+calc = GPAW('graphene_bilayer_sc_'+str(RRA)+'.gpw',
             fixdensity=True,
             symmetry='off',
             kpts=kpts,
-            # convergence={'bands': '110%'},
-            txt='graphene_bilayer_gs.txt',
-            parallel=dict(band=2,              # band parallelization
+            txt='graphene_bilayer_bs_'+str(RRA)+'.txt',
+            parallel=dict(band=4,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
             )
 
 en2 = calc.get_potential_energy()
 parprint('Finished band structure calculation.')
-parprint('Energy self-consistent:', en1, '\nEnergy bandstructure:', en2)
+calc.write('graphene_bilayer_bs_'+str(RRA)+'.gpw')
+parprint('Energy self-consistent:', en1, '\nEnergy band structure:', en2)
 
 bs = calc.band_structure()
-bs.write(filename='bandstructure_rot' +
-         str(np.round(np.degrees(theta), 2)) + '.json')
+bs.write(filename='bandstructure_rot' + str(RRA) + '.json')
 parprint('Saved band structure file.')
+
+# unfold = Unfold(name='graphene_bilayer_rot_'+str(RRA),
+#                 calc='graphene_bilayer_bs_'+str(RRA)+'.gpw',
+#                 M=M,
+#                 spinorbit=False)
+#
+# unfold.spectral_function(kpts=kpts, x=x, X=X,
+#                          points_name=['M', 'K', 'G'])
+#
+# parprint('Completed band structure unfolding.')

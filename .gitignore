@@ -11,3 +11,6 @@
 # error and output file
 *.o*
 *.e*
+
+# submit file
+submit.sh
