@@ -1,17 +1,16 @@
-"""Band structure for graphene
-
-Calculate the band structure of graphene along special point in the BZ
+"""
+Calculate the band structure of graphene twisted bilayer
+ along special points in the BZ.
 """
 
+import sys
 import numpy as np
 from ase import Atoms
-from ase.visualize import view
+from ase.parallel import parprint
+# from ase.visualize import view
 from gpaw import GPAW, FermiDirac
 from ase.dft.kpoints import get_special_points, bandpath
-from gpaw.unfold import Unfold, find_K_from_k
-from ase.parallel import parprint
-import matplotlib.pyplot as plt
-import sys
+from write_bandstructure import bs_to_json
 
 
 def unit_vector(vector):
@@ -38,19 +37,22 @@ def repeat_cell(pos, cell, size):
     '''Repeat unit cell of graphene in order to obtain
        a larger hexagonal cell, with a side of length 'size'.
 
-       At the moment works based on this structure:
+       It probably doesn't work in general, just for this structure:
 
              #     #
-          #     #     #
+          2     #     #
 
           #     #     #
-       A     #     #     #
+       A     1     #     #
 
        B     #     #     #
           #     #     #
 
           #     #     #
              #     #
+
+       The two unit cell vectors are going
+       from A to 1 and from A to 2, respectively.
     '''
 
     # positions of big unit cell
@@ -174,7 +176,7 @@ calc = GPAW(mode='lcao',
             kpts=(5, 5, 1),
             occupations=FermiDirac(0.01),
             txt='graphene_bilayer_sc_'+str(RRA)+'.txt',
-            parallel=dict(band=4,              # band parallelization
+            parallel=dict(band=2,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
             )
@@ -189,24 +191,8 @@ calc.write('graphene_bilayer_sc_'+str(RRA)+'.gpw')
 super_cell[2][2] = v_norm
 points = get_special_points(super_cell, lattice='hexagonal')
 MKG = [points[k] for k in 'MKG']
-kpts, x, X = bandpath(MKG, super_cell, 100)
+kpts, x, X = bandpath(MKG, super_cell, 25)
 super_cell[2][2] = vacuum
-
-# compute transformation matrix between primary cell and super cell
-# ratio = v_norm / a
-# alpha = angle_between(un_el_cell[0], v2)
-# c, s = np.cos(alpha), np.sin(alpha)
-# Ralpha = np.array([[c, -s], [s, c]])
-# Ralpha *= ratio
-# M = np.array([np.append(Ralpha[0], 0),
-#               np.append(Ralpha[1], 0),
-#               [0, 0, 1]])
-
-# compute kpoints in supercell
-# skpts = []
-# for k in kpts:
-#     sk = find_K_from_k(k, M)[0]
-#     skpts.append(sk)
 
 # Restart from ground state and fix potential:
 calc = GPAW('graphene_bilayer_sc_'+str(RRA)+'.gpw',
@@ -214,7 +200,7 @@ calc = GPAW('graphene_bilayer_sc_'+str(RRA)+'.gpw',
             symmetry='off',
             kpts=kpts,
             txt='graphene_bilayer_bs_'+str(RRA)+'.txt',
-            parallel=dict(band=4,              # band parallelization
+            parallel=dict(band=2,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
             )
@@ -225,15 +211,5 @@ calc.write('graphene_bilayer_bs_'+str(RRA)+'.gpw')
 parprint('Energy self-consistent:', en1, '\nEnergy band structure:', en2)
 
 bs = calc.band_structure()
-bs.write(filename='bandstructure_rot' + str(RRA) + '.json')
+bs_to_json(bs, filename='bandstructure_rot' + str(RRA) + '.json')
 parprint('Saved band structure file.')
-
-# unfold = Unfold(name='graphene_bilayer_rot_'+str(RRA),
-#                 calc='graphene_bilayer_bs_'+str(RRA)+'.gpw',
-#                 M=M,
-#                 spinorbit=False)
-#
-# unfold.spectral_function(kpts=kpts, x=x, X=X,
-#                          points_name=['M', 'K', 'G'])
-#
-# parprint('Completed band structure unfolding.')
