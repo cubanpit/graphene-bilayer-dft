@@ -3,14 +3,16 @@ Calculate the band structure of graphene twisted bilayer
  along special points in the BZ.
 """
 
+import os
 import sys
 import numpy as np
 from ase import Atoms
 from ase.parallel import parprint
+from ase.dft.kpoints import bandpath
+from ase.dft.band_structure import get_band_structure
 # from ase.visualize import view
+# from ase.build import niggli_reduce
 from gpaw import GPAW, FermiDirac
-from ase.dft.kpoints import get_special_points, bandpath
-from write_bandstructure import bs_to_json
 
 
 def unit_vector(vector):
@@ -98,6 +100,11 @@ def repeat_cell(pos, cell, size):
     return big_pos
 
 
+# create directory for data and output files
+datapath = 'data/'
+if not os.path.exists(datapath):
+    os.makedirs(datapath)
+
 # experimental cell distance, bond length and layer distance
 a = 2.46
 b = a / np.sqrt(3)
@@ -160,9 +167,6 @@ vacuum = 21
 super_cell = np.array([np.append(v2, 0),
                        np.append(v3, 0),
                        [0, 0, vacuum]])
-primary_cell = np.array([np.append(un_el_cell[0], 0),
-                         np.append(un_el_cell[1], 0),
-                         [0, 0, vacuum]])
 
 grap_bilayer = Atoms('C' * len(super_pos),
                      positions=super_pos,
@@ -175,7 +179,7 @@ calc = GPAW(mode='lcao',
             xc='PBE',
             kpts=(5, 5, 1),
             occupations=FermiDirac(0.01),
-            txt='graphene_bilayer_sc_'+str(RRA)+'.txt',
+            txt=datapath+'graphene_bilayer_sc_'+str(RRA)+'.txt',
             parallel=dict(band=2,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
@@ -184,32 +188,33 @@ calc = GPAW(mode='lcao',
 grap_bilayer.calc = calc
 en1 = grap_bilayer.get_potential_energy()
 parprint('Finished self-consistent calculation.')
-calc.write('graphene_bilayer_sc_'+str(RRA)+'.gpw')
+calc.write(datapath+'graphene_bilayer_sc_'+str(RRA)+'.gpw')
 
 # Build path in BZ for bandstructure calculation.
 # Temporarely change the cell height to workaround an ASE problem.
 super_cell[2][2] = v_norm
-points = get_special_points(super_cell, lattice='hexagonal')
-MKG = [points[k] for k in 'MKG']
-kpts, x, X = bandpath(MKG, super_cell, 25)
+path = bandpath('MKG', super_cell, 50)
+kpts = path.kpts
 super_cell[2][2] = vacuum
 
 # Restart from ground state and fix potential:
-calc = GPAW('graphene_bilayer_sc_'+str(RRA)+'.gpw',
+calc = GPAW(datapath+'graphene_bilayer_sc_'+str(RRA)+'.gpw',
             fixdensity=True,
-            symmetry='off',
             kpts=kpts,
-            txt='graphene_bilayer_bs_'+str(RRA)+'.txt',
+            symmetry='off',
+            txt=datapath+'graphene_bilayer_bs_'+str(RRA)+'.txt',
             parallel=dict(band=2,              # band parallelization
                           augment_grids=True,  # use all cores for XC/Poisson
                           sl_auto=True)        # enable parallel ScaLAPACK
             )
 
+grap_bilayer.calc = calc
 en2 = calc.get_potential_energy()
 parprint('Finished band structure calculation.')
-calc.write('graphene_bilayer_bs_'+str(RRA)+'.gpw')
+calc.write(datapath+'graphene_bilayer_bs_'+str(RRA)+'.gpw')
 parprint('Energy self-consistent:', en1, '\nEnergy band structure:', en2)
 
-bs = calc.band_structure()
-bs_to_json(bs, filename='bandstructure_rot' + str(RRA) + '.json')
+bs = get_band_structure(grap_bilayer, _bandpath=path)
+bs.write(datapath+'bandstructure_rot'+str(RRA)+'.json')
+path.write(datapath+'bandpath_rot'+str(RRA)+'.json')
 parprint('Saved band structure file.')
