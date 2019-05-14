@@ -9,7 +9,7 @@ import numpy as np
 from ase import Atoms
 from ase.parallel import parprint
 from ase.dft.kpoints import bandpath
-from ase.dft.band_structure import get_band_structure
+from ase.dft.band_structure import get_band_structure, BandStructure
 # from ase.visualize import view
 # from ase.build import niggli_reduce
 from gpaw import GPAW, FermiDirac
@@ -114,11 +114,16 @@ d = 3.35
 # n, m = 2, 1       # 21.79 deg
 # n, m = 3, 2       # 13.17 deg
 # n, m = 4, 3       # 9.43 deg
+# n, m = 5, 4       # 7.34 deg
+# n, m = 6, 5       # 6.01 deg
 # n, m = 7, 6       # 5.09 deg
 # n, m = 8, 7       # 4.41 deg
 # n, m = 9, 8       # 3.89 deg
-n, m = 10, 9      # 3.48 deg # CRASH
-# n, m = 13, 12     # 2.65 deg # CRASH
+# n, m = 10, 9      # 3.48 deg - 22GB - 1.5H - 10nodes - (5,5,1)+50
+# n, m = 13, 12     # 2.65 deg - 62GB - 7H - 10nodes - (5,5,1)+50
+n, m = 14, 13
+# n, m = 19, 18     # 1.79 deg
+# n, m = 23, 22     # 1.47 deg
 # n, m = 32, 31     # 1.05 deg # INSANE
 gcd = np.gcd(n, m)
 n /= gcd
@@ -177,7 +182,7 @@ grap_bilayer = Atoms('C' * len(super_pos),
 calc = GPAW(mode='lcao',
             basis='sz(dzp)',
             xc='PBE',
-            kpts=(5, 5, 1),
+            kpts=(2, 2, 1),
             occupations=FermiDirac(0.01),
             txt=datapath+'graphene_bilayer_sc_'+str(RRA)+'.txt',
             parallel=dict(band=2,              # band parallelization
@@ -197,24 +202,34 @@ path = bandpath('MKG', super_cell, 50)
 kpts = path.kpts
 super_cell[2][2] = vacuum
 
-# Restart from ground state and fix potential:
-calc = GPAW(datapath+'graphene_bilayer_sc_'+str(RRA)+'.gpw',
-            fixdensity=True,
-            kpts=kpts,
-            symmetry='off',
-            txt=datapath+'graphene_bilayer_bs_'+str(RRA)+'.txt',
-            parallel=dict(band=2,              # band parallelization
-                          augment_grids=True,  # use all cores for XC/Poisson
-                          sl_auto=True)        # enable parallel ScaLAPACK
-            )
+# Compute band path with a sequential approach, one kpt at a time
+parprint('Calculation on', len(kpts), 'k points:')
+ref, energies = [], []
+for i, k in enumerate(kpts):
+    # Restart from ground state and fix potential:
+    calc = GPAW(datapath+'graphene_bilayer_sc_'+str(RRA)+'.gpw',
+                fixdensity=True,
+                kpts=[k],
+                symmetry='off',
+                txt=datapath+'graphene_bilayer_bs_'+str(RRA)+'.txt',
+                parallel=dict(band=5,              # band parallelization
+                              augment_grids=True,  # use all cores for XC/Poisson
+                              sl_auto=True)        # enable parallel ScaLAPACK
+                )
 
-grap_bilayer.calc = calc
-en2 = calc.get_potential_energy()
-parprint('Finished band structure calculation.')
-calc.write(datapath+'graphene_bilayer_bs_'+str(RRA)+'.gpw')
+    grap_bilayer.calc = calc
+    en2 = calc.get_potential_energy()
+    bs = get_band_structure(grap_bilayer, _bandpath=path).todict()
+
+    ref.append(bs['reference'])
+    energies.append(bs['energies'][0][0])
+
+    parprint(i, end=' ', flush=True)
+
+parprint('\nFinished band structure calculation.')
 parprint('Energy self-consistent:', en1, '\nEnergy band structure:', en2)
 
-bs = get_band_structure(grap_bilayer, _bandpath=path)
+bs = BandStructure(path, [energies], reference=ref[0])
 bs.write(datapath+'bandstructure_rot'+str(RRA)+'.json')
 path.write(datapath+'bandpath_rot'+str(RRA)+'.json')
 parprint('Saved band structure file.')
