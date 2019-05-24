@@ -5,7 +5,6 @@ Calculate the band structure of graphene along special point in the BZ
 
 import numpy as np
 from ase import Atoms
-from ase.visualize import view
 from gpaw import GPAW, FermiDirac, PW
 from ase.dft.kpoints import get_special_points
 
@@ -38,11 +37,11 @@ calc = GPAW(mode=PW(400),
 
 graphene.calc = calc
 en = graphene.get_potential_energy()
-calc.write('graphene_gs.gpw')
+calc.write('graphene_sc.gpw')
 print('Potential Energy at first step:', en)
 
 # Restart from ground state and fix potential:
-calc = GPAW('graphene_gs.gpw',
+calc = GPAW('graphene_sc.gpw',
             nbands=16,
             fixdensity=True,
             symmetry='off',
@@ -51,8 +50,8 @@ calc = GPAW('graphene_gs.gpw',
             txt=None)
 
 en = calc.get_potential_energy()
-calc.write('graphene_gs.gpw')
+calc.write('graphene_bs.gpw')
 print('Potential Energy at second step:', en)
 
 bs = calc.band_structure()
-bs.plot(filename=None, show=True, emin=-10, emax=12)
+bs.write('graphene_bandstructure.json')

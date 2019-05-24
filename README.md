@@ -1,14 +1,16 @@
 # DFT calculation on twisted graphene bilayer
 
-Bandstructure calculation for different graphene structures:
- 
- - graphene monolayer;
- - graphene bilayer, AB stacking;
- - graphene bilayer, relative rotation angle.
+The main goal is to compute the band structure for twisted bilayer graphene, in order to explore the behavior at, so called, magic angles of relative rotation, that lead to superconductive and Mott-like insulating states.
+
+This repository contains Python scripts that compute the band structure for different graphene structures:
+
+- graphene monolayer;
+- graphene bilayer, AB stacking;
+- graphene bilayer, with any relative rotation angle.
+
+The code depends on [ASE](https://wiki.fysik.dtu.dk/ase/index.html) and [GPAW](https://wiki.fysik.dtu.dk/gpaw/) for the DFT calculations.
 
 ### Sources and References
-
-[ASE](https://wiki.fysik.dtu.dk/ase/index.html) and [GPAW](https://wiki.fysik.dtu.dk/gpaw/)
 
 [Cao Y, Fatemi V, Fang S, Watanabe K, Taniguchi T, Kaxiras E, Jarillo-Herrero P. 2018. ''Unconventional superconductivity in magic-angle graphene superlattices''. Nature.](https://doi.org/10.1038/nature26160)
 

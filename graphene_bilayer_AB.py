@@ -22,23 +22,22 @@ grap_bilayer = Atoms('C' * 4,
                             [0, 2 * b, d]],
                  cell=[[      a,       0,     0],
                        [0.5 * a, 1.5 * b,     0],
-                       [      0,       0, 7 * a]],
+                       [      0,       0, 10 * a]],
                  pbc=True)
-view(grap_bilayer)
 
 # Perform standard ground state calculation (with plane wave basis)
-calc = GPAW(mode='lcao',
-            basis='dzp',
-            xc='PBE',
-            kpts=(10, 10, 1),
-            txt='graphene_bilayer_gs.txt')
-
-# calc = GPAW(mode=PW(350),
+# calc = GPAW(mode='lcao',
+#             basis='dzp',
 #             xc='PBE',
 #             kpts=(10, 10, 1),
-#             random=True,  # random guess (needed if many empty bands required)
-#             occupations=FermiDirac(0.01),
-#             txt='graphene_gs.txt')
+#             txt='graphene_bilayer_gs.txt')
+
+calc = GPAW(mode=PW(400),
+            xc='PBE',
+            kpts=(10, 10, 1),
+            random=True,  # random guess (needed if many empty bands required)
+            occupations=FermiDirac(0.01),
+            txt='graphene_bilayer_gs.txt')
 
 grap_bilayer.calc = calc
 en = grap_bilayer.get_potential_energy()
@@ -47,14 +46,15 @@ print('Potential Energy at first step:', en)
 
 # Restart from ground state and fix potential:
 calc = GPAW('graphene_bilayer_gs.gpw',
-            nbands=16,
+            nbands=25,
             fixdensity=True,
             symmetry='off',
-            kpts={'path': 'GMKG', 'npoints': 200},
+            convergence={'bands': 16},
+            kpts={'path': 'MKG', 'npoints': 200},
             txt='graphene_bilayer_gs.txt')
 
 en = calc.get_potential_energy()
 print('Potential Energy at second step:', en)
 
 bs = calc.band_structure()
-bs.plot(filename='bandstructure_AB.png', show=True, emin=-15, emax=15)
+bs.write('bandstructure_AB.json')

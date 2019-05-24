@@ -16,12 +16,12 @@ from gpaw import GPAW, FermiDirac
 
 
 def unit_vector(vector):
-    """ Returns the unit vector of the vector.  """
+    ''' Returns the unit vector of the vector. '''
     return vector / np.linalg.norm(vector)
 
 
 def angle_between(v1, v2):
-    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+    ''' Returns the angle in radians between vectors 'v1' and 'v2'::
 
         >>> angle_between((1, 0, 0), (0, 1, 0))
             1.5707963267948966
@@ -29,7 +29,7 @@ def angle_between(v1, v2):
             0.0
         >>> angle_between((1, 0, 0), (-1, 0, 0))
             3.141592653589793
-    """
+    '''
     v1_u = unit_vector(v1)
     v2_u = unit_vector(v2)
     return np.math.atan2(np.cross(v1_u, v2_u), np.dot(v1_u, v2_u))
@@ -55,6 +55,7 @@ def repeat_cell(pos, cell, size):
 
        The two unit cell vectors are going
        from A to 1 and from A to 2, respectively.
+       In this case the side size is 2.
     '''
 
     # positions of big unit cell
@@ -113,7 +114,7 @@ d = 3.35
 # indices for rotation -> moving from (n, m) to (m, n)
 # n, m = 2, 1       # 21.79 deg
 # n, m = 3, 2       # 13.17 deg
-# n, m = 4, 3       # 9.43 deg
+n, m = 4, 3       # 9.43 deg
 # n, m = 5, 4       # 7.34 deg
 # n, m = 6, 5       # 6.01 deg
 # n, m = 7, 6       # 5.09 deg
@@ -121,7 +122,9 @@ d = 3.35
 # n, m = 9, 8       # 3.89 deg
 # n, m = 10, 9      # 3.48 deg - 22GB - 1.5H - 10nodes - (5,5,1)+50
 # n, m = 13, 12     # 2.65 deg - 62GB - 7H - 10nodes - (5,5,1)+50
-n, m = 14, 13
+# n, m = 14, 13     # 2.45 deg
+# n, m = 16, 15     # 2.13 deg
+# n, m = 18, 17     # 1.89 deg
 # n, m = 19, 18     # 1.79 deg
 # n, m = 23, 22     # 1.47 deg
 # n, m = 32, 31     # 1.05 deg # INSANE
@@ -178,7 +181,7 @@ grap_bilayer = Atoms('C' * len(super_pos),
                      cell=super_cell,
                      pbc=True)
 
-# Perform standard ground state calculation (with plane wave basis)
+# Perform standard ground state calculation (with smallest LCAO basis)
 calc = GPAW(mode='lcao',
             basis='sz(dzp)',
             xc='PBE',
@@ -196,13 +199,14 @@ parprint('Finished self-consistent calculation.')
 calc.write(datapath+'graphene_bilayer_sc_'+str(RRA)+'.gpw')
 
 # Build path in BZ for bandstructure calculation.
-# Temporarely change the cell height to workaround an ASE problem.
+# Temporarily change the cell height to workaround an ASE problem.
 super_cell[2][2] = v_norm
 path = bandpath('MKG', super_cell, 50)
 kpts = path.kpts
 super_cell[2][2] = vacuum
 
-# Compute band path with a sequential approach, one kpt at a time
+# Compute band path with a sequential approach, one kpt at a time,
+#  to use less memory.
 parprint('Calculation on', len(kpts), 'k points:')
 ref, energies = [], []
 for i, k in enumerate(kpts):
