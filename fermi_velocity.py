@@ -3,7 +3,7 @@
 The usual bandstructure is on a MKG path in the Brillouin zone, in this script
 we take the four branches around the K point, compute the slope through a
 linear fit fot each branch and then average the four slopes to get a single
-value. This is a rough estimate.
+value. This is a very rough estimate.
 '''
 
 
